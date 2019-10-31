@@ -17,6 +17,12 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import processo.smartmei.finderdogdetails.adapter.BreedAdapter
 import processo.smartmei.finderdogdetails.util.MethodUtils
+import kotlin.collections.ArrayList
+import androidx.recyclerview.widget.DividerItemDecoration
+import androidx.core.app.ComponentActivity.ExtraData
+import androidx.core.content.ContextCompat.getSystemService
+import android.icu.lang.UCharacter.GraphemeClusterBreak.T
+
 
 
 
@@ -29,8 +35,16 @@ class MainActivity : AppCompatActivity() {
     var progressBar: ProgressBar? = null
     var methodUtils = MethodUtils()
     var url = "https://dog.ceo/api/breeds/list/all"
+    var listToShow: ArrayList<String> ? = null
+    var breedsChunked: List<List<String>> ? = null
+    var currentItems = 0
+    var outItems = 0
+    var totalItems = 0
+    var count = 0
+    var hasScroll = false
 
     var handler = Handler()
+    var handler2 = Handler()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +53,28 @@ class MainActivity : AppCompatActivity() {
         val PERMISSIONS = arrayOf(Manifest.permission.INTERNET)
         recyclerView = findViewById(R.id.breedRecView)
         progressBar = findViewById(R.id.progressBreedId)
+
+        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if(newState == AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL) {
+                    hasScroll = true
+                }
+
+            }
+
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                currentItems = viewManager.childCount
+                totalItems = viewManager.itemCount
+                outItems = (viewManager  as LinearLayoutManager).findFirstVisibleItemPosition()
+
+                if(hasScroll && (currentItems + outItems == totalItems)) {
+                    hasScroll = false
+                    updateBreedList()
+                }
+            }
+
+
+        })
 
 
         if(!hasPermissions(this, PERMISSIONS)) {
@@ -57,16 +93,25 @@ class MainActivity : AppCompatActivity() {
                     progressBar!!.visibility = View.GONE
 
                     if (breeds != null) {
-                        val breedsString = methodUtils.jsonArrayToStringArray(breeds);
-
+                        breedsChunked = methodUtils.jsonArrayToStringArray(breeds).chunked(10)
+                        listToShow = ArrayList<String>(breedsChunked!![count])
                         viewManager = LinearLayoutManager(baseContext)
                         recyclerView.layoutManager = viewManager
+                        recyclerView.addItemDecoration(
+                            DividerItemDecoration(
+                                recyclerView.context,
+                                DividerItemDecoration.VERTICAL
+                            )
+                        )
 
-                        recyclerView.adapter = BreedAdapter(breedsString, baseContext) {breed ->
-                            val intentDogDescription = Intent(applicationContext, BreedActivity::class.java)
-                            intentDogDescription.putExtra("breedName", breed)
-                            startActivity(intentDogDescription)
-                        }
+
+                        recyclerView.adapter =
+                            BreedAdapter(listToShow!!, applicationContext) { breed ->
+                                val intentDogDescription =
+                                    Intent(applicationContext, BreedActivity::class.java)
+                                intentDogDescription.putExtra("breedName", breed)
+                                startActivity(intentDogDescription)
+                            }
 
                     } else {
                        Toast.makeText(baseContext, "not found breed...", Toast.LENGTH_SHORT).show()
@@ -85,5 +130,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    fun updateBreedList() {
+        count++
+
+        if(count < breedsChunked!!.size) {
+            progressBar?.visibility = View.VISIBLE
+
+            object : Thread() {
+                override fun run() {
+
+                    handler2.post(Runnable {
+                            listToShow?.addAll(breedsChunked!![count])
+                            recyclerView.adapter!!.notifyDataSetChanged()
+                            progressBar?.visibility = View.GONE
+                    })
+                }
+            }.start()
+        }
     }
 }

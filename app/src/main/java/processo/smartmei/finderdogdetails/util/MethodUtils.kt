@@ -31,13 +31,14 @@ class MethodUtils {
         val scaleWidth = newWidth.toFloat() / width
         val scaleHeight = newHeight.toFloat() / height
         val matrix = Matrix()
+
+        matrix.postScale(scaleWidth, scaleHeight)
+
+
         val resizedBitmap = Bitmap.createBitmap(
             bm, 0, 0, width, height, matrix, false
         )
-
-        matrix.postScale(scaleWidth, scaleHeight)
         bm.recycle()
-
         return resizedBitmap
     }
 }
